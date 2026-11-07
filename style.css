@@ -199,6 +199,27 @@ details.src .note {
 .q-stem { font-size: 1.05rem; font-weight: 600; margin-top: .3rem; }
 .obj-meta { font-size: .78rem; color: var(--muted); margin-bottom: .4rem; }
 
+/* ---- 真题整卷 ---- */
+.paper-head {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 1rem 1.1rem; margin-bottom: .7rem; box-shadow: var(--shadow);
+}
+.paper-sec { font-weight: 700; margin: 1.1rem .1rem .5rem; font-size: .95rem; }
+.pq {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  margin-bottom: .5rem; padding: .05rem .9rem;
+}
+.pq summary {
+  cursor: pointer; padding: .6rem 0; list-style: none;
+  display: flex; gap: .5rem; align-items: baseline; font-size: .92rem; line-height: 1.5;
+}
+.pq summary::-webkit-details-marker { display: none; }
+.pq summary::after { content: "▸"; color: var(--muted); margin-left: .3rem; transition: transform .15s; flex-shrink: 0; }
+.pq[open] summary::after { transform: rotate(90deg); }
+.pq .no { color: var(--brand); font-weight: 700; flex-shrink: 0; }
+.pq .score { margin-left: auto; color: var(--muted); font-size: .75rem; flex-shrink: 0; }
+.pq .inner { border-top: 1px dashed var(--line); padding: .55rem 0 .8rem; }
+
 /* ---- 浏览 / 索引 ---- */
 .chap { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: .55rem; overflow: hidden; }
 .chap > summary {

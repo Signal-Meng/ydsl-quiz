@@ -9,6 +9,7 @@ const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + St
 function addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const KIND_NAME = { term: "名词解释", short: "简答", essay: "论述", analysis: "分析", tpl: "模板" };
+const KIND_SCORE = { term: "每题 3~5 分", short: "每题 8~10 分", essay: "每题 15~20 分", analysis: "每题 15~25 分" };
 const SRC_ORDER = { "分题型手册": 0, "真题": 1, "王瑞元·第六版": 2, "段锐·第四版": 3 };
 
 const DATA = window.QUIZ_DATA;
@@ -193,6 +194,7 @@ function renderHome() {
     ${modeBtn("terms-rev", "🔁", "名解反序", "看定义猜术语")}
     ${modeBtn("subj", "✍️", "主观题背诵", "简答 " + c.short + " · 论述 " + c.essay + " · 分析 " + c.analysis)}
     ${modeBtn("zt", "📅", "真题模式", "按年份刷 2014–2026")}
+    ${modeBtn("paper", "📜", "真题整卷", "按年份模拟一套完整卷")}
     ${modeBtn("obj", "⚡", "客观题快刷", "自动生成选择 / 挖空")}
     ${modeBtn("review", "🎯", "错题 / 收藏", "专项重刷")}
   </div>
@@ -227,6 +229,7 @@ function resetProg() {
 /* ================= 配置页 ================= */
 const DEFAULT_KINDS = { terms: ["term"], "terms-rev": ["term"], obj: ["term"], subj: ["short"], zt: ["short", "essay", "analysis"], review: [], browse: [] };
 function openSetup(mode) {
+  if (mode === "paper") { S = { mode: "paper", stage: "paper-picker" }; renderPaperPicker(); return; }
   const saved = store.set["f_" + mode] || {};
   const f = Object.assign({ book: "all", ch: "all", freq: "", kinds: (DEFAULT_KINDS[mode] || []).slice(), years: [], q: "", n: 20, rv: "wrong" }, saved);
   f.kinds = (f.kinds && f.kinds.length ? f.kinds : (DEFAULT_KINDS[mode] || []).slice());
@@ -343,9 +346,10 @@ function onChip(b) {
 }
 
 /* ================= 闪卡会话 ================= */
-function startFlash() {
+function startFlash(keepOrder) {
   S.stage = "flash";
-  S.queue = S.pool.slice().sort(byDue);
+  S.queue = S.pool.slice();
+  if (!keepOrder) S.queue.sort(byDue);
   S.idx = 0; S.flipped = false; S.done = 0; S.fails = new Map();
   renderCard();
   setHints("空格 翻面 · 1 不会 / 2 模糊 / 3 会 · S 收藏 · Esc 退出");
@@ -555,6 +559,88 @@ function finishObj() {
   setHints("");
   $("#btnAgain").onclick = () => openSetup("obj");
   $("#btnHome2").onclick = goHome;
+}
+
+/* ================= 真题整卷 ================= */
+function paperCardsOf(year) {
+  const order = { term: 0, short: 1, essay: 2, analysis: 3 };
+  return CARDS.filter(c => order[c.kind] !== undefined && (c.years || []).includes(year))
+    .sort((a, b) => (order[a.kind] - order[b.kind]) || (a.no - b.no));
+}
+function renderPaperPicker() {
+  const years = Array.from(new Set(CARDS.flatMap(c => c.years || []))).sort((a, b) => b - a);
+  view.innerHTML = `
+  <div class="panel">
+    <h2>真题整卷 · 选择年份</h2>
+    <div class="sub" style="color:var(--muted);font-size:.85rem;margin-bottom:.7rem">按题型分组还原卷面;分值为该题型的惯例参考分</div>
+    <div class="grid">${years.map(y => {
+    const n = paperCardsOf(y).length;
+    return `<button class="mode" data-year="${y}"><span class="ico">📄</span><b>${y} 年卷</b><span>${n} 题</span></button>`;
+  }).join("")}</div>
+    <div class="center" style="margin-top:.9rem"><button class="btn ghost" id="btnBack">返回</button></div>
+  </div>`;
+  $("#btnBack").onclick = goHome;
+  $$("#view .mode").forEach(b => b.onclick = () => renderPaper(+b.dataset.year));
+}
+function renderPaper(year) {
+  S = { mode: "paper", stage: "paper", year };
+  const cards = paperCardsOf(year);
+  const secNo = ["一", "二", "三", "四"];
+  const secs = [];
+  ["term", "short", "essay", "analysis"].forEach(k => {
+    const list = cards.filter(c => c.kind === k);
+    if (list.length) secs.push({ k, list });
+  });
+  let qn = 0;
+  view.innerHTML = `
+  <div class="sess-top">
+    <div class="left"><div class="cnt">${year} 年真题 · 共 ${cards.length} 题</div></div>
+    <button class="mini" id="btnQuit">返回</button>
+  </div>
+  <div class="paper-head">
+    <b>${year} 年运动生理学试卷(整理版)</b>
+    <div style="font-size:.8rem;color:var(--muted);margin-top:.3rem">
+      ${secs.map(s => KIND_NAME[s.k] + "×" + s.list.length).join(" · ")} · 分值为题型惯例参考
+    </div>
+    <div style="margin-top:.7rem">
+      <button class="btn" id="btnPaperGo">按卷面顺序整卷刷</button>
+      <button class="btn ghost" id="btnPaperShuffle" style="margin-left:.4rem">乱序刷</button>
+    </div>
+  </div>
+  ${secs.map((s, i) => `
+    <div class="paper-sec">${secNo[i]}、${KIND_NAME[s.k]}(共 ${s.list.length} 题,${KIND_SCORE[s.k]})</div>
+    ${s.list.map(c => {
+    qn++;
+    const st = store.srs[c.id] || {};
+    const front = cardFront(c);
+    return `<details class="pq" data-id="${c.id}">
+        <summary><span class="no">${qn}.</span><span style="flex:1">${esc(trunc(front, 80))}</span>
+          ${c.freq === "高频" ? '<span class="st" style="color:var(--brand);font-size:.72rem">高频</span>' : ""}
+          <span class="score">${(st.b === 3 ? "✓ " : "") + (st.star ? "★" : "")}</span>
+        </summary>
+        <div class="inner">
+          ${answerHtml(c)}
+          <button class="btn ghost mini pv-star" data-id="${c.id}">${st.star ? "★ 已收藏" : "☆ 收藏"}</button>
+        </div>
+      </details>`;
+  }).join("")}`).join("")}`;
+  $("#btnQuit").onclick = goHome;
+  $("#btnPaperGo").onclick = () => {
+    S = { mode: "zt", f: { book: "zt", ch: "all", freq: "", kinds: ["term", "short", "essay", "analysis"], years: [year], q: "" }, stage: "setup" };
+    S.pool = cards.slice(); S.paperOrder = true;
+    startFlash(true);
+  };
+  $("#btnPaperShuffle").onclick = () => {
+    S = { mode: "zt", f: { book: "zt", ch: "all", freq: "", kinds: ["term", "short", "essay", "analysis"], years: [year], q: "" }, stage: "setup" };
+    S.pool = shuffle(cards.slice()); S.paperOrder = true;
+    startFlash(true);
+  };
+  $$(".pv-star").forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const r = srsOf(b.dataset.id);
+    r.star = r.star ? 0 : 1; save();
+    b.textContent = r.star ? "★ 已收藏" : "☆ 收藏";
+  });
 }
 
 /* ================= 浏览(考点索引) ================= */
